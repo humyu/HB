@@ -1,0 +1,7 @@
+body { max-width: 900px; margin: 30px auto; font-family: Arial, sans-serif; }
+.comment-item { border-bottom: 1px solid #eee; padding: 10px 0; }
+.reply-list { margin-left: 40px; background: #f9f9f9; padding: 10px; margin-top: 8px; }
+.reply-box { display: none; margin-top: 10px; }
+textarea { width: 100%; height: 60px; box-sizing: border-box; }
+button { margin-left: 8px; }
+.reply-list > div { padding: 4px 0; }

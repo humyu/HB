@@ -28,10 +28,13 @@ public class CommentService {
      * @return 评论列表
      */
     public List<CommentVO> getCommentsForArticle(Long articleId) {
+        // 查询所有评论，按创建时间排序
         List<Comment> allComments =
                 commentMapper.findByArticleIdOrderByCreateTimeAsc(articleId);
 
+        // 所有评论(一级评论会附带子评论)
         List<CommentVO> rootComments = new ArrayList<>();
+        // rootMap：{一级评论id : 一级评论(会附带子评论)}
         Map<Long, CommentVO> rootMap = new HashMap<>();
 
         // 第一遍：找一级评论
@@ -45,8 +48,11 @@ public class CommentService {
 
         // 第二遍：把所有子评论挂到对应一级评论下
         for (Comment c : allComments) {
+            //选出子评论
             if (c.getRootId() != null) {
+                // 根据子评论的 root_id 查找 对应的根评论
                 CommentVO rootVO = rootMap.get(c.getRootId());
+                // 如果还有根评论，就将此子评论加入到对应的根评论下
                 if (rootVO != null) {
                     rootVO.getChildren().add(convertToVO(c));
                 }
@@ -107,6 +113,7 @@ public class CommentService {
         vo.setContent(c.getContent());
         vo.setTargetUserName(c.getTargetUserName());
 
+        // 格式化评论的创建时间
         if (c.getCreateTime() != null) {
             vo.setCreateTime(c.getCreateTime()
                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));

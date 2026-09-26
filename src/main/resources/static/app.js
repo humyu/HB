@@ -1,0 +1,217 @@
+
+const BASE_URL = 'http://localhost:8080/api';
+// ========== 配置 ==========
+const articleId = new URLSearchParams(location.search).get('id') || 1;
+
+// ========== API 封装 ==========
+const api = {
+    async getCurrentUser() {
+        const res = await fetch(`${BASE_URL}/user/current`);
+        return res.json();
+    },
+    async getComments() {
+        const res = await fetch(`${BASE_URL}/comment/list/${articleId}`);
+        return res.json();
+    },
+    async addComment(payload) {
+        const res = await fetch(`${BASE_URL}/comment/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        return res.json();
+    }
+};
+
+// ========== 工具 ==========
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str ?? '';
+    return div.innerHTML;
+}
+
+// ========== 渲染子评论 ==========
+function renderChildComment(vo) {
+    return `
+            <div id="comment-${vo.id}">
+                <b>${escapeHtml(vo.userName)}</b>
+                回复 <b>${escapeHtml(vo.targetUserName)}</b>:
+                <span>${escapeHtml(vo.content)}</span>
+                <button class="reply-btn"
+                        data-id="${vo.id}"
+                        data-rootid="${vo.rootId}"
+                        data-user="${escapeHtml(vo.userName)}">回复</button>
+            </div>
+        `;
+}
+
+// 渲染评论列表详情
+function renderRootComment(vo) {
+    const hasChildren = vo.children && vo.children.length > 0;
+    return `
+            <div class="comment-item" id="comment-${vo.id}">
+                <div>
+                    <b>${escapeHtml(vo.userName)}</b>:
+                    <span>${escapeHtml(vo.content)}</span>
+                    <button class="reply-btn"
+                            data-id="${vo.id}"
+                            data-rootid="${vo.id}"
+                            data-user="${escapeHtml(vo.userName)}">回复</button>
+                </div>
+
+                <!--渲染子评论-->
+                <div class="reply-list" id="reply-list-${vo.id}"
+                     style="${hasChildren ? '' : 'display:none'}">
+                    ${hasChildren ? vo.children.map(renderChildComment).join('') : ''}
+                </div>
+
+                <!-- 隐藏的子评论的回复框 -->
+                <div class="reply-box" id="reply-box-${vo.id}">
+                    <textarea class="reply-content" placeholder="回复..."></textarea>
+                    <input type="hidden" class="reply-parent-id">
+                    <input type="hidden" class="reply-root-id">
+                    <input type="hidden" class="reply-target-user">
+                    <button class="submit-reply-btn">提交回复</button>
+                </div>
+            </div>
+        `;
+}
+
+// 渲染评论列表
+function renderCommentList(list) {
+    const container = document.getElementById('comment-list');
+    // 没有评论
+    if (!list || list.length === 0) {
+        container.innerHTML = '<p style="color:#999">还没有评论，快来抢沙发~</p>';
+        return;
+    }
+    // 渲染评论列表详情
+    container.innerHTML = list.map(renderRootComment).join('');
+}
+
+// ========== 动态追加 ==========
+function appendRootComment(vo) {
+    const container = document.getElementById('comment-list');
+    // 去掉“还没有评论”的占位
+    if (container.querySelector('p')) container.innerHTML = '';
+    container.insertAdjacentHTML('beforeend', renderRootComment(vo));
+}
+
+function appendChildComment(vo) {
+    let listEl = document.getElementById('reply-list-' + vo.rootId);
+    const rootEl = document.getElementById('comment-' + vo.rootId);
+    if (!rootEl) {
+        location.reload();
+        return;
+    }
+
+    if (!listEl) {
+        const boxEl = rootEl.querySelector('.reply-box');
+        boxEl.insertAdjacentHTML('beforebegin',
+            `<div class="reply-list" id="reply-list-${vo.rootId}"></div>`);
+        listEl = document.getElementById('reply-list-' + vo.rootId);
+    }
+
+    listEl.style.display = '';
+    listEl.insertAdjacentHTML('beforeend', renderChildComment(vo));
+}
+
+// ========== 提交逻辑 ==========
+async function submitComment(content, parentId, rootId, targetUser) {
+    if (!content || !content.trim()) {
+        alert('评论内容不能为空');
+        return;
+    }
+
+    const payload = {
+        articleId: Number(articleId),
+        content: content.trim(),
+        parentId: parentId || null,
+        rootId: rootId || null,
+        targetUserName: targetUser || null
+    };
+
+    try {
+        const res = await api.addComment(payload);
+        if (res.code !== 200) {
+            alert(res.msg || '评论失败');
+            return;
+        }
+
+        const vo = res.data;
+
+        if (vo.rootId == null) {
+            document.getElementById('main-comment-content').value = '';
+            appendRootComment(vo);
+        } else {
+            const box = document.getElementById('reply-box-' + vo.rootId);
+            if (box) {
+                box.querySelector('.reply-content').value = '';
+                box.style.display = 'none';
+            }
+            appendChildComment(vo);
+        }
+    } catch (e) {
+        alert('网络异常：' + e.message);
+    }
+}
+
+// ========== 事件委托 ==========
+document.addEventListener('click', (e) => {
+    // 点“回复”
+    if (e.target.classList.contains('reply-btn')) {
+        const btn = e.target;
+        const parentId = btn.dataset.id;
+        const rootId = btn.dataset.rootid;
+        const targetUser = btn.dataset.user;
+
+        // 隐藏其他回复框
+        document.querySelectorAll('.reply-box').forEach(b => b.style.display = 'none');
+
+        const box = document.getElementById('reply-box-' + rootId);
+        box.style.display = 'block';
+        box.querySelector('.reply-parent-id').value = parentId;
+        box.querySelector('.reply-root-id').value = rootId;
+        box.querySelector('.reply-target-user').value = targetUser;
+        const ta = box.querySelector('.reply-content');
+        ta.placeholder = '回复 ' + targetUser + ' :';
+        ta.focus();
+    }
+
+    // 提交子评论
+    if (e.target.classList.contains('submit-reply-btn')) {
+        const box = e.target.closest('.reply-box');
+        submitComment(
+            box.querySelector('.reply-content').value,
+            box.querySelector('.reply-parent-id').value,
+            box.querySelector('.reply-root-id').value,
+            box.querySelector('.reply-target-user').value
+        );
+    }
+
+    // 主评论提交
+    if (e.target.id === 'submit-main-btn') {
+        submitComment(
+            document.getElementById('main-comment-content').value,
+            null, null, null
+        );
+    }
+});
+
+// ========== 初始化 ==========
+(async function init() {
+    try {
+        // 1. 拿当前身份
+        const userRes = await api.getCurrentUser();
+        document.getElementById('current-user').textContent = userRes.data;
+
+        // 2. 拿评论列表
+        const listRes = await api.getComments();
+        // 3. 渲染列表
+        renderCommentList(listRes.data);
+    } catch (e) {
+        console.error(e);
+        document.getElementById('comment-list').innerHTML =
+            '<p style="color:red">加载失败：' + e.message + '</p>';
+    }
+})();

@@ -13,7 +13,6 @@ public class Comment {
     private Long parentId;
     private Long rootId;   // 根评论
     private String targetUserName;  // 被回复人的名字
-
     private LocalDateTime createTime;
 
 
