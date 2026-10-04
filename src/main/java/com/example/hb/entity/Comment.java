@@ -9,11 +9,11 @@ public class Comment {
     private Long articleId;
     private String userName;
     private String content;
+    private LocalDateTime createTime;
 
     private Long parentId;
     private Long rootId;   // 根评论
     private String targetUserName;  // 被回复人的名字
-    private LocalDateTime createTime;
 
 
 }
